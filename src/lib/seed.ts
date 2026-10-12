@@ -39,14 +39,14 @@ export function seedDB(): DB {
       { id: 'en2', studentId: 'stu2', productId: 'p2', snapshot: { productName: '学习方法小班课', version: 1, price: 1600, unit: '期(8课时)', deductRule: '服务完成核销', refundRule: '开课前全退，开课后按已上课时折算', plannedCount: 8 }, startDate: d(-14), totalUnits: 8, status: '服务中', createdAt: d(-14) },
     ],
     sessions: [
-      { id: 's1', type: '一对一咨询', title: '林小舟 第5次咨询', studentId: 'stu1', date: d(0), start: '09:30', end: '10:15', location: '线上', prepNote: '复盘上周数学限时训练；准备时间管理表', status: '计划' },
+      { id: 's1', type: '一对一咨询', title: '林小舟 第5次咨询', studentId: 'stu1', date: d(0), start: '09:30', end: '10:15', location: '线上', prepNote: '复盘上周数学限时训练；准备时间管理表', status: '计划', meetingProvider: '腾讯会议', meetingId: '会议号待补' },
       { id: 's2', type: '班课', title: '学习方法小班 第3课', date: d(0), start: '14:00', end: '15:30', location: '教室A', prepNote: '打印错题整理模板 6 份', status: '计划' },
-      { id: 's3', type: '一对一咨询', title: '林小舟 第4次咨询', studentId: 'stu1', date: d(-7), start: '09:30', end: '10:15', location: '线上', status: '已完成', completedAt: d(-7) },
-      { id: 's4', type: '一对一咨询', title: '王思远 首次咨询', studentId: 'stu3', date: d(1), start: '19:00', end: '19:45', location: '线上', prepNote: '查看公众号留言记录', status: '计划' },
+      { id: 's3', type: '一对一咨询', title: '林小舟 第4次咨询', studentId: 'stu1', date: d(-7), start: '09:30', end: '10:15', location: '线上', status: '已完成', completedAt: d(-7), meetingProvider: '腾讯会议', meetingId: '会议号待补' },
+      { id: 's4', type: '一对一咨询', title: '王思远 首次咨询', studentId: 'stu3', date: d(1), start: '19:00', end: '19:45', location: '线上', prepNote: '查看公众号留言记录', status: '计划', meetingProvider: '腾讯会议', meetingId: '会议号待补' },
       { id: 's5', type: '研发', title: '学习力营大纲打磨', date: d(2), start: '10:00', end: '11:30', status: '计划' },
     ],
     attendance: [
-      { id: 'a1', sessionId: 's3', studentId: 'stu1', status: '出勤', checkinAt: d(-7) + 'T09:28', corrections: [] },
+      { id: 'a1', sessionId: 's3', studentId: 'stu1', status: '出勤', evidence: '手动确认', checkinAt: d(-7) + 'T09:28', corrections: [] },
     ],
     ledger: [
       { id: 'l0', enrollmentId: 'en1', type: '增加', qty: 12, unit: '课时', reason: '报名初始权益（快照 v2）', createdAt: d(-33) },
@@ -130,6 +130,42 @@ export function seedDB(): DB {
     usage: [
       { month: '上月（示例）', aiCalls: 96, reviewCount: 2, transcribeMin: 118, images: 22, storageMB: 320, note: '单价待报价，仅记录用量' },
     ],
+    // ---- v0.4 增量补丁示例数据（P00—P10） ----
+    // P00 接入能力真实状态：无调用证据不得标「验证通过」
+    providerCaps: [
+      { id: 'pc1', provider: 'GitHub', capability: '代码仓库读写', state: '验证通过', verifiedAt: d(0), evidence: '开源仓库已推送提交记录', fallback: '无' },
+      { id: 'pc2', provider: '企业微信', capability: '会话内容同步', state: '受限', lastError: '会话内容接口文档与权限待复核', fallback: '人工录入沟通事实' },
+      { id: 'pc3', provider: '飞书', capability: '文档/日程/妙记接入', state: '已配置', lastError: '需逐页授权，验证调用未做', fallback: '手工复制索引' },
+      { id: 'pc4', provider: '钉钉', capability: 'AI听记/录音转写', state: '仅链接', lastError: '连接方式（链接/应用/导出）待查明', fallback: '手工粘贴转写文字' },
+      { id: 'pc5', provider: '腾讯会议', capability: '参会记录API', state: '已配置', lastError: '账号API能力待验证', fallback: '手动确认考勤' },
+      { id: 'pc6', provider: 'Supabase/Neon', capability: '数据库托管', state: '已配置', lastError: '迁移未启动（W01 待验证）', fallback: '浏览器本地存储' },
+      { id: 'pc7', provider: 'Canva', capability: '设计物料生成', state: '仅链接', fallback: '手工设计' },
+    ],
+    // P02 文档式 Skill 与规则版本：未确认规则不自动分级
+    rules: [
+      { id: 'rule1', ruleType: '爆款筛选', version: 1, status: '草稿', content: '阅读量高≠业务相关；须同时满足：与目标家长人群相关、有可借鉴结构、非标题党误导', examples: '反例：纯情绪宣泄文即使10万+也不入库' },
+      { id: 'rule2', ruleType: '客户跟进SOP', version: 1, status: '已确认', confirmedAt: d(-10), content: '首次咨询后24小时内发评估单；一周内未回复转入「等待中」并写明等待对象', examples: '王思远案例：等待王奶奶确认时间' },
+      { id: 'rule3', ruleType: '记录归档', version: 1, status: '已确认', confirmedAt: d(-10), content: '归档前须完成：事实/观察/约定三段齐全、待核对项列出、AI使用范围标注', examples: '模糊录音内容标「待核对」，不猜' },
+      { id: 'rule4', ruleType: '四象限分类', version: 1, status: '草稿', content: '默认待分类；到期日≠象限，A到期提醒与B四象限分开维护', examples: '' },
+    ],
+    // P04 沟通事实示例（人工录入；无同步标「人工」）
+    commEvents: [
+      { id: 'ce1', studentId: 'stu1', contactId: 'c1', occurredAt: d(-1) + 'T20:30', direction: '老师发出', channel: '企业微信', source: '人工录入', needSummary: '发送第4次咨询反馈与口算约定', nextAction: '本周内跟进自测结果', followupAt: d(3), coverageState: '人工' },
+      { id: 'ce2', studentId: 'stu1', contactId: 'c1', occurredAt: d(-1) + 'T21:05', direction: '家长回复', channel: '企业微信', source: '人工录入', needSummary: '林妈妈确认收到，反馈孩子愿意尝试口算', coverageState: '人工' },
+      { id: 'ce3', studentId: 'stu3', contactId: 'c4', occurredAt: d(-2) + 'T15:00', direction: '家长回复', channel: '微信', source: '人工录入', needSummary: '王奶奶说今晚和孩子爸商量后回复', nextAction: '今日未回复则电话跟进', followupAt: d(0), coverageState: '人工' },
+    ],
+    // P06 精华提取候选（第一版手动标记）
+    materialCandidates: [
+      { id: 'mc1', sourceRef: 'r1', sourceLocator: '工作台记录 r1（第4次咨询）', originalExcerpt: '限时训练20题完成14题，正确率86%；中段注意力下降明显', context: '林小舟数学陪跑第4次', editedDraft: '从做不完到86%正确率：一次限时训练复盘（待脱敏）', purpose: '教学案例素材', reviewStatus: '候选', createdAt: d(-6) },
+    ],
+    meetingEvidence: [],
+    migrationBatches: [],
+    collectionConfig: {
+      id: 'cc1', targetAudience: '小学高年级—初中学生家长', themes: '学习习惯、时间管理、错题方法',
+      platforms: '公众号、小红书', excludeTopics: '应试提分夸张承诺、制造焦虑',
+      metricStandard: '阅读量、在看、转发（采样时间必记）；无指标不标爆款', frequency: '每周一次人工筛选',
+      purpose: '选题参考与结构借鉴', budget: '待确认（不预写成本）', status: '草稿',
+    },
   };
 }
 
