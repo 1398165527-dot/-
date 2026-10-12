@@ -122,6 +122,25 @@ export default function Schedule({ go }: { go: (n: Nav) => void }) {
                     {stu && <button className="text-sky-700 hover:underline" onClick={() => { setEditing(null); go({ page: 'clients', param: stu.id }); }}>查看学员档案 →</button>}
                   </div>
 
+                  {/* P08：线上考勤保留腾讯会议；发链接/点击/参会/有效出勤是不同状态 */}
+                  {(s.location === '线上' || s.meetingProvider) && (
+                    <Section title="会议信息（腾讯会议保留，不强制迁移）" accent="#98341F">
+                      <div className="grid grid-cols-2 gap-2 items-end">
+                        <Field label="会议平台">
+                          <select className="w-full border rounded-md h-8 px-2 text-sm bg-white" value={s.meetingProvider ?? '腾讯会议'}
+                            onChange={e => update(d => { d.sessions.find(x => x.id === s.id)!.meetingProvider = e.target.value as Session['meetingProvider']; })}>
+                            {['腾讯会议', '飞书会议', '其他', '线下'].map(x => <option key={x}>{x}</option>)}
+                          </select>
+                        </Field>
+                        <Field label="会议号 / 链接（人工维护）">
+                          <Input value={s.meetingId ?? ''} placeholder="如 123-456-789"
+                            onChange={e => update(d => { d.sessions.find(x => x.id === s.id)!.meetingId = e.target.value; })} />
+                        </Field>
+                      </div>
+                      <p className="text-[11px] text-stone-400 mt-1.5">发链接 ≠ 点击 ≠ 参会 ≠ 有效出勤；参会记录自动匹配需账号 API 能力（当前待验证），此前签到为手动确认，无证据不自动判缺勤。</p>
+                    </Section>
+                  )}
+
                   <Section title="课前准备" accent="#98341F">
                     <p className="text-stone-600">{s.prepNote ?? '未填写准备清单'}</p>
                   </Section>
@@ -131,7 +150,9 @@ export default function Schedule({ go }: { go: (n: Nav) => void }) {
                       <div className="space-y-2">
                         {atts.length > 0 ? atts.map(a => (
                           <div key={a.id} className="flex items-center justify-between gap-2 flex-wrap">
-                            <span>{stu.name} <StatusBadge s={a.status} /> <span className="text-xs text-stone-400">{a.checkinAt.replace('T', ' ')}</span></span>
+                            <span>{stu.name} <StatusBadge s={a.status} />
+                              <span className={`text-[10px] rounded px-1.5 py-0.5 ml-1 ${a.evidence === '参会证据匹配' ? 'bg-emerald-100 text-emerald-800' : a.evidence === '未确认' ? 'bg-amber-100 text-amber-800' : 'bg-stone-100 text-stone-600'}`}>证据：{a.evidence ?? '手动确认'}</span>
+                              <span className="text-xs text-stone-400 ml-1">{a.checkinAt.replace('T', ' ')}</span></span>
                             <div className="flex gap-1">
                               {(['出勤', '迟到', '请假', '缺勤'] as AttStatus[]).filter(x => x !== a.status).map(x => (
                                 <Button key={x} size="sm" variant="outline" className="h-7 text-xs" onClick={() => {

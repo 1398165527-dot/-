@@ -33,7 +33,7 @@ export default function Clients({ focusId, go }: { focusId?: string; go: (n: Nav
       <PageHeader title="客户与学员" color="#42546A" sub="家庭—联系人—学员三层建档；同一学员一份档案，查重建议前置、不自动合并"
         actions={<div className="flex gap-2">
           <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="新学员姓名/代号" className="w-40 h-9" />
-          <Button size="sm" className="bg-[#42546A] text-white" onClick={() => {
+          <Button size="sm" className="bg-[#42546A] hover:bg-[#3545569] text-white" onClick={() => {
             const name = newName.trim();
             if (!name) { toast.error('请输入姓名'); return; }
             const dup = db.students.find(s => s.name === name);
@@ -51,7 +51,7 @@ export default function Clients({ focusId, go }: { focusId?: string; go: (n: Nav
       </div>
 
       {list.length === 0 ? (
-        <EmptyState kind={q || stageFilter !== '全部' ? 'filtered' : 'empty'} />
+        <EmptyState kind={q || stageFilter !== '全部' ? 'filtered' : 'empty'} action="新建学员" onAction={() => {}} />
       ) : (
         <div className="grid gap-2">
           {list.map(s => {
@@ -113,6 +113,7 @@ function StudentDetail({ id, back, go }: { id: string; back: () => void; go: (n:
       <Tabs defaultValue="records">
         <TabsList className="flex flex-wrap h-auto gap-1 bg-stone-100">
           <TabsTrigger value="records">服务记录</TabsTrigger>
+          <TabsTrigger value="comm">沟通时间线</TabsTrigger>
           <TabsTrigger value="needs">需求与目标</TabsTrigger>
           <TabsTrigger value="ledger">课时与报名</TabsTrigger>
           <TabsTrigger value="exams">成绩</TabsTrigger>
@@ -147,6 +148,10 @@ function StudentDetail({ id, back, go }: { id: string; back: () => void; go: (n:
               </ul>
             )}
           </Section>
+        </TabsContent>
+
+        <TabsContent value="comm" className="mt-3">
+          <CommTimeline studentId={id} />
         </TabsContent>
 
         <TabsContent value="needs" className="mt-3">
@@ -269,18 +274,75 @@ function StudentDetail({ id, back, go }: { id: string; back: () => void; go: (n:
   );
 }
 
+// P04 沟通时间线：最近主动触达与最近收到回复分开；无同步记录标「未知」；不自动外发
+function CommTimeline({ studentId }: { studentId: string }) {
+  const [db, update] = useDB();
+  const events = db.commEvents.filter(e => e.studentId === studentId).sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
+  const lastOut = events.find(e => e.direction === '老师发出');
+  const lastIn = events.find(e => e.direction === '家长回复');
+  const contactName = (cid?: string) => db.contacts.find(c => c.id === cid)?.name ?? '';
+  return (
+    <Section title="沟通时间线（事实记录，非自动同步）" accent="#42546A"
+      extra={<Button size="sm" variant="outline" onClick={() => {
+        const direction = window.prompt('方向：老师发出 / 家长回复 / 未知', '老师发出');
+        if (!direction || !['老师发出', '家长回复', '未知'].includes(direction)) return;
+        const needSummary = window.prompt('沟通要点（需求/内容摘要）'); if (!needSummary) return;
+        const nextAction = window.prompt('下一步动作（可空）') ?? undefined;
+        update(d => d.commEvents.unshift({
+          id: uid(), studentId, occurredAt: `${today()}T${new Date().toTimeString().slice(0, 5)}`,
+          direction: direction as '老师发出', channel: '企业微信/微信（人工录入）', source: '人工录入',
+          needSummary, nextAction, coverageState: '人工',
+        }));
+        toast.success('沟通事实已登记（人工录入）');
+      }}>登记沟通</Button>}>
+      <div className="grid grid-cols-2 gap-2 mb-3 text-sm">
+        <div className="rounded bg-[#FAF7F2] p-2">
+          <p className="text-[10px] text-stone-400">最近主动触达</p>
+          <p className="font-semibold">{lastOut ? lastOut.occurredAt.replace('T', ' ') : '未知'}</p>
+          {lastOut && <p className="text-[11px] text-stone-500 truncate">{lastOut.needSummary}</p>}
+        </div>
+        <div className="rounded bg-[#FAF7F2] p-2">
+          <p className="text-[10px] text-stone-400">最近收到回复</p>
+          <p className="font-semibold">{lastIn ? lastIn.occurredAt.replace('T', ' ') : '未知'}</p>
+          {lastIn && <p className="text-[11px] text-stone-500 truncate">{lastIn.needSummary}</p>}
+        </div>
+      </div>
+      {events.length === 0 ? <EmptyState kind="empty" /> : (
+        <ul className="space-y-2 text-sm">
+          {events.map(e => (
+            <li key={e.id} className="rounded-lg border bg-[#FAF7F2] p-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className={`text-[10px] rounded px-1.5 py-0.5 ${e.direction === '老师发出' ? 'bg-sky-100 text-sky-800' : e.direction === '家长回复' ? 'bg-emerald-100 text-emerald-800' : 'bg-stone-200 text-stone-500'}`}>{e.direction}</span>
+                <span className="text-xs text-stone-400">{e.occurredAt.replace('T', ' ')}</span>
+                <span className="text-xs text-stone-400">{e.channel}{contactName(e.contactId) ? ` · ${contactName(e.contactId)}` : ''}</span>
+                <span className={`text-[10px] rounded px-1.5 py-0.5 ml-auto ${e.coverageState === '已同步' ? 'bg-emerald-100 text-emerald-800' : e.coverageState === '人工' ? 'bg-stone-100 text-stone-600' : 'bg-amber-100 text-amber-800'}`}>覆盖：{e.coverageState}</span>
+              </div>
+              {e.needSummary && <p className="text-xs mt-1.5">{e.needSummary}</p>}
+              {e.nextAction && <p className="text-[11px] text-stone-500 mt-0.5">下一步：{e.nextAction}{e.followupAt ? `（${e.followupAt} 前）` : ''}</p>}
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="text-[11px] text-stone-400 mt-2">企业微信会话同步接口权限待复核，当前全部为人工录入；「未知」不猜。外发动作需人工确认后在工作台外执行。</p>
+    </Section>
+  );
+}
+
 // 服务记录整理编辑（S3 Skill 流程的系统侧：事实/观察/约定/待核对分开；归档与反馈状态独立）
 function RecordEditor({ recId }: { recId: string }) {
   const [db, update] = useDB();
   const r = db.serviceRecords.find(x => x.id === recId)!;
   return (
     <div className="mt-3 pt-3 border-t space-y-2 text-sm">
-      <Field label="来源方式（不强制统一记录方式）">
+      <Field label="来源方式（P07 入口分级：钉钉已转写 / 其他文字 / 手写识别；模糊标待核对，重复导入不多建）">
         <select className="border rounded-md h-8 px-2 text-sm bg-white" value={r.sourceType}
           onChange={e => update(d => { d.serviceRecords.find(x => x.id === recId)!.sourceType = e.target.value as typeof r.sourceType; })}>
           {['文字', '手写识别', '录音转写'].map(x => <option key={x}>{x}</option>)}
         </select>
       </Field>
+      {r.sourceType === '录音转写' && (
+        <p className="text-[11px] text-amber-700">录音来源须注明（钉钉已转写 / 其他导出 / 应用内）；连接方式待查明前按人工粘贴处理；无法辨认片段标待核对，归档不自动扣课、不自动外发。</p>
+      )}
       <Field label="摘要"><Input value={r.summary} onChange={e => update(d => { d.serviceRecords.find(x => x.id === recId)!.summary = e.target.value; })} placeholder="一句话摘要" /></Field>
       <Field label="整理稿（建议结构：事实/观察/约定/待办/待核对，可不全）">
         <textarea className="w-full border rounded-md p-2 text-sm min-h-[100px] bg-white" value={r.content}
