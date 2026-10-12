@@ -1,15 +1,25 @@
 // P13 文档中心：三层信息统一视图（原件在哪里 / 工作台保存什么 / AI 可使用什么）
+// v0.4 P05：口碑素材索引（原件留飞书，待确认/未脱敏不进可发布列表，撤回排除未来生成）
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { useDB, uid, today } from '@/lib/store';
 import { PageHeader, Section, EmptyState, Field } from '@/components/shared';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import type { ExternalUseStatus } from '@/types';
+
+const EXT_USE: ExternalUseStatus[] = ['待确认', '允许', '禁止', '已撤回'];
+const EXT_COLOR: Record<ExternalUseStatus, string> = {
+  '待确认': 'bg-amber-100 text-amber-800', '允许': 'bg-emerald-100 text-emerald-800',
+  '禁止': 'bg-rose-100 text-rose-800', '已撤回': 'bg-stone-200 text-stone-500',
+};
 
 export default function Documents() {
   const [db, update] = useDB();
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ title: '', storageType: '老师电脑本地', location: '', summary: '', aiScope: '仅摘要可供 AI 使用' });
+  const materials = db.docRefs.filter(d => d.storageType === '飞书素材');
+  const publishable = materials.filter(d => d.externalUse === '允许' && !!d.redactedRef);
 
   return (
     <div>
@@ -22,7 +32,7 @@ export default function Documents() {
             <Field label="标题"><Input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} /></Field>
             <Field label="存放类型">
               <select className="w-full border rounded-md h-9 px-2 text-sm bg-white" value={form.storageType} onChange={e => setForm({ ...form, storageType: e.target.value })}>
-                {['老师电脑本地', '云文档', '工作台存储'].map(x => <option key={x}>{x}</option>)}
+                {['老师电脑本地', '云文档', '工作台存储', '飞书素材'].map(x => <option key={x}>{x}</option>)}
               </select>
             </Field>
             <Field label="位置（路径或链接）"><Input value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} placeholder="如 D:\合同\xxx.pdf 或文档链接" /></Field>
@@ -35,9 +45,14 @@ export default function Documents() {
           </div>
           <Button className="mt-3 bg-[#42546A] text-white" onClick={() => {
             if (!form.title.trim() || !form.location.trim()) { toast.error('请填写标题与位置'); return; }
-            update(d => d.docRefs.unshift({ id: uid(), title: form.title, storageType: form.storageType as '老师电脑本地', location: form.location, summary: form.summary, aiScope: form.aiScope, valid: true, createdAt: today() }));
+            update(d => d.docRefs.unshift({
+              id: uid(), title: form.title, storageType: form.storageType as '老师电脑本地', location: form.location,
+              summary: form.summary, aiScope: form.aiScope, valid: true, createdAt: today(),
+              // P05：新增资料对外使用默认待确认，不进入可发布列表
+              externalUse: '待确认',
+            }));
             setAdding(false); setForm({ title: '', storageType: '老师电脑本地', location: '', summary: '', aiScope: '仅摘要可供 AI 使用' });
-            toast.success('已登记索引（未上传原件）');
+            toast.success('已登记索引（未上传原件；对外使用默认待确认）');
           }}>保存索引</Button>
         </Section>
       )}
@@ -64,11 +79,36 @@ export default function Documents() {
                   <div className="rounded-lg bg-[#FAF7F2] p-2"><p className="text-stone-400 mb-0.5">② 工作台保存了什么</p><p>{doc.summary || '（未填摘要）'}</p></div>
                   <div className="rounded-lg bg-[#FAF7F2] p-2"><p className="text-stone-400 mb-0.5">③ AI 可使用什么</p><p>{doc.aiScope}</p></div>
                 </div>
+                {/* P05：对外使用确认状态（逐条人工确认；撤回后排除未来生成） */}
+                <div className="mt-2 flex items-center gap-2 text-[11px]">
+                  <span className="text-stone-400">对外使用：</span>
+                  <select className="border rounded h-6 px-1 text-[11px] bg-white" value={doc.externalUse ?? '待确认'}
+                    onChange={e => { update(d => { d.docRefs.find(x => x.id === doc.id)!.externalUse = e.target.value as ExternalUseStatus; }); toast.success('对外使用状态已更新'); }}>
+                    {EXT_USE.map(x => <option key={x}>{x}</option>)}
+                  </select>
+                  <span className={`rounded px-1.5 py-0.5 text-[10px] ${EXT_COLOR[doc.externalUse ?? '待确认']}`}>{doc.externalUse ?? '待确认'}</span>
+                  {doc.externalUse === '允许' && !doc.redactedRef && <span className="text-amber-700">尚无脱敏版本位置，不进可发布列表</span>}
+                  {doc.externalUse === '已撤回' && <span className="text-stone-500">已撤回：排除未来生成，已发布内容需人工下线</span>}
+                </div>
               </div>
             );
           })}
         </div>
       )}
+
+      <Section title={`口碑素材可发布清单（${publishable.length} 条；待确认或未脱敏不进入）`} accent="#42546A">
+        {publishable.length === 0 ? <EmptyState kind="empty" /> : (
+          <ul className="space-y-1.5 text-sm">
+            {publishable.map(d => (
+              <li key={d.id} className="rounded-lg border bg-white p-2.5 flex items-center justify-between gap-2">
+                <span>{d.title}<span className="text-xs text-stone-400 ml-2">脱敏版本：{d.redactedRef}</span></span>
+                <span className="text-[10px] rounded px-1.5 py-0.5 bg-emerald-100 text-emerald-800">允许对外</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="text-[11px] text-stone-400 mt-2">原件留在飞书，工作台仅存索引；脱敏版本位置与对外确认缺一不可。</p>
+      </Section>
     </div>
   );
 }

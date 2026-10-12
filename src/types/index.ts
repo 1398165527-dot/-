@@ -43,16 +43,22 @@ export interface Enrollment {
 // ---- 课次 / 考勤 / 课时账 ----
 export type SessionType = '一对一咨询' | '班课' | '陪跑' | '研发' | '个人';
 export type SessionStatus = '计划' | '已完成' | '已取消';
+export type MeetingProvider = '腾讯会议' | '飞书会议' | '其他' | '线下';
 export interface Session {
   id: ID; type: SessionType; title: string; studentId?: ID;
   date: string; // YYYY-MM-DD
   start: string; end: string; // HH:MM，精确到分钟
   location?: string; prepNote?: string; status: SessionStatus;
   completedAt?: string; seriesId?: string;
+  // P08：保留腾讯会议，按条件升级；飞书会议为备选，不强制迁移
+  meetingProvider?: MeetingProvider; meetingLink?: string; meetingId?: string;
 }
 export type AttStatus = '出勤' | '迟到' | '请假' | '缺勤';
+// P08：发链接、点击链接、参会、有效出勤、服务完成、扣课是不同状态
+export type AttEvidence = '手动确认' | '参会证据匹配' | '未确认';
 export interface Attendance {
   id: ID; sessionId: ID; studentId: ID; status: AttStatus;
+  evidence: AttEvidence; // 默认手动确认；无证据标未确认，不自动判缺勤
   checkinAt: string; corrections: { at: string; from: AttStatus; to: AttStatus; reason: string }[];
 }
 export type LedgerType = '增加' | '核销' | '补回' | '失效' | '退款冲销';
@@ -83,10 +89,13 @@ export interface Finance {
 }
 
 // ---- 合同与文档索引 ----
+export type ExternalUseStatus = '待确认' | '允许' | '禁止' | '已撤回';
 export interface DocRef {
-  id: ID; title: string; storageType: '老师电脑本地' | '云文档' | '工作台存储';
+  id: ID; title: string; storageType: '老师电脑本地' | '云文档' | '工作台存储' | '飞书素材';
   location: string; studentId?: ID; enrollmentId?: ID;
   summary: string; aiScope: string; valid: boolean; createdAt: string;
+  // P05/P03：对外使用确认状态与脱敏版本位置（新增资料默认待确认）
+  externalUse?: ExternalUseStatus; redactedRef?: string; sourceNote?: string;
 }
 
 // ---- 任务 / 等待 / 三重点 ----
@@ -136,6 +145,57 @@ export interface ProfileState { current: ProfileVersion; history: ProfileVersion
 export interface ModulePref { key: string; label: string; enabled: boolean; hidden: boolean; }
 export interface UsageRecord { month: string; aiCalls: number; reviewCount: number; transcribeMin: number; images: number; storageMB: number; note: string; }
 
+// ================= v0.4 增量补丁（P00—P10） =================
+
+// P00 接入能力：凭据不出现在页面；没有调用证据不显示验证通过
+export type ProviderState = '仅链接' | '已配置' | '验证通过' | '受限' | '失败';
+export interface ProviderCapability {
+  id: ID; provider: string; capability: string; state: ProviderState;
+  verifiedAt?: string; evidence?: string; lastError?: string; fallback?: string;
+}
+
+// P02 文档式 Skill 与规则版本
+export interface Rule {
+  id: ID; ruleType: string; version: number; status: '草稿' | '已确认';
+  confirmedAt?: string; content: string; examples?: string;
+}
+
+// P04 客户沟通事实（最近主动触达与最近收到回复分开；无同步记录标未知）
+export interface CommEvent {
+  id: ID; studentId: ID; contactId?: ID; occurredAt: string;
+  direction: '老师发出' | '家长回复' | '未知';
+  channel: string; source: '人工录入' | '企业微信同步' | '其他';
+  needSummary?: string; nextAction?: string; followupAt?: string;
+  coverageState: '已同步' | '人工' | '未知';
+}
+
+// P06 精华提取候选：老师定义标准，第一版手动标记；AI 只提候选
+export interface MaterialCandidate {
+  id: ID; sourceRef: string; sourceLocator: string; originalExcerpt: string;
+  context?: string; editedDraft?: string; purpose: string;
+  reviewStatus: '候选' | '已接受' | '已拒绝'; createdAt: string;
+}
+
+// P08 参会证据（全栈版接腾讯/飞书接口后写入；验证版仅模型）
+export interface MeetingEvidence {
+  id: ID; sessionId: ID; provider: string; eventId?: string;
+  participantRef: string; joinAt: string; leaveAt?: string;
+  matchedStudentId?: ID; matchStatus: '已匹配' | '待核对' | '无法匹配';
+}
+
+// P01 迁移批次（备份→盘点→预览→小批导入→核对→双设备测试→停止旧写入）
+export interface MigrationBatch {
+  id: ID; source: string; previewStatus: '预览' | '已确认' | '已回退';
+  successCount: number; failedCount: number; rollbackRef?: string; createdAt: string;
+}
+
+// P03 内容情报配置（先筛选、再持续采集；热度与业务相关性分开）
+export interface CollectionConfig {
+  id: ID; targetAudience?: string; themes?: string; platforms?: string;
+  excludeTopics?: string; metricStandard?: string; frequency?: string;
+  purpose?: string; budget?: string; status: '草稿' | '已确认';
+}
+
 export interface DB {
   families: Family[]; contacts: Contact[]; students: Student[]; needs: Need[];
   products: Product[]; enrollments: Enrollment[];
@@ -146,6 +206,10 @@ export interface DB {
   ideas: Idea[]; knowledge: Knowledge[]; devProjects: DevProject[];
   contents: ContentItem[]; cooperations: Cooperation[];
   profile: ProfileState; modulePrefs: ModulePref[]; usage: UsageRecord[];
+  // v0.4 增量
+  providerCaps: ProviderCapability[]; rules: Rule[]; commEvents: CommEvent[];
+  materialCandidates: MaterialCandidate[]; meetingEvidence: MeetingEvidence[];
+  migrationBatches: MigrationBatch[]; collectionConfig?: CollectionConfig;
 }
 
 // ---- 模块清单（对应 M01—M18 导航组） ----

@@ -14,6 +14,35 @@ export default function Business() {
 
       <Section title="内容情报（保存来源、发布/采集时间与指标口径）" accent="#6B7BB4"
         extra={<Button size="sm" variant="outline" onClick={() => toast.info('验证版为手工采集入口；后台持续采集需全栈版调度（Cloudflare Workers 定时任务，W01 验证项）')}>采集状态</Button>}>
+        {/* P03 先筛选再持续采集：热度与业务相关性分开；配置未确认前不启动自动采集 */}
+        {db.collectionConfig && (
+          <div className="rounded-lg border border-dashed bg-[#FAF7F2] p-3 mb-3 text-xs">
+            <div className="flex items-center justify-between gap-2">
+              <p className="font-medium text-[13px]">采集配置（先筛选）</p>
+              <button onClick={() => {
+                if (db.collectionConfig!.status === '草稿') {
+                  if (!window.confirm('确认采集配置后才会进入持续采集（全栈版调度）。确认？')) return;
+                  update(d => { d.collectionConfig!.status = '已确认'; });
+                } else {
+                  update(d => { d.collectionConfig!.status = '草稿'; });
+                }
+                toast.success('配置状态已更新');
+              }}>
+                <span className={`text-[10px] rounded px-1.5 py-0.5 ${db.collectionConfig.status === '已确认' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>{db.collectionConfig.status}</span>
+              </button>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-x-4 gap-y-1 mt-1.5 text-stone-600">
+              <p>目标人群：{db.collectionConfig.targetAudience}</p>
+              <p>主题：{db.collectionConfig.themes}</p>
+              <p>平台：{db.collectionConfig.platforms}</p>
+              <p>排除：{db.collectionConfig.excludeTopics}</p>
+              <p>指标口径：{db.collectionConfig.metricStandard}</p>
+              <p>频率：{db.collectionConfig.frequency}</p>
+              <p>用途：{db.collectionConfig.purpose}</p>
+              <p>预算：{db.collectionConfig.budget}</p>
+            </div>
+          </div>
+        )}
         <div className="space-y-2">
           {db.contents.map(c => (
             <div key={c.id} className="rounded-xl border bg-white p-3 text-sm">
@@ -52,6 +81,9 @@ export default function Business() {
               <div>
                 <p className="font-medium">{c.org} <span className="text-xs text-stone-400 font-normal">· {c.purpose}</span></p>
                 {c.nextStep && <p className="text-[11px] text-amber-700 mt-0.5">下一步：{c.nextStep}</p>}
+                {c.status === '合作中' && (
+                  <p className="text-[11px] text-stone-500 mt-0.5 rounded bg-[#FAF7F2] px-1.5 py-0.5 inline-block">合作结算待评估：不生成自动应付分成 / 税额 / 会计分录，结算口径人工确认后手工入账</p>
+                )}
               </div>
               <select className="border rounded-md h-8 px-2 text-xs bg-white" value={c.status}
                 onChange={e => update(d => { d.cooperations.find(x => x.id === c.id)!.status = e.target.value as typeof c.status; })}>
@@ -60,7 +92,7 @@ export default function Business() {
             </div>
           ))}
         </div>
-        <p className="text-[11px] text-stone-400 mt-2">交流可转合作项目并产生任务与线索；合作承诺不由 AI 捏造。</p>
+        <p className="text-[11px] text-stone-400 mt-2">交流可转合作项目并产生任务与线索；合作承诺不由 AI 捏造。P09：分成模式保留，不进入自动账务。</p>
       </Section>
     </div>
   );
