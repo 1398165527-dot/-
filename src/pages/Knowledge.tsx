@@ -19,6 +19,7 @@ export default function Knowledge() {
         <TabsList className="bg-stone-100">
           <TabsTrigger value="ideas">灵感库</TabsTrigger>
           <TabsTrigger value="knowledge">知识库</TabsTrigger>
+          <TabsTrigger value="materials">精华候选</TabsTrigger>
           <TabsTrigger value="dev">研发项目</TabsTrigger>
         </TabsList>
 
@@ -91,6 +92,49 @@ export default function Knowledge() {
                 </li>
               ))}
             </ul>
+          </Section>
+        </TabsContent>
+
+        <TabsContent value="materials" className="mt-3">
+          {/* P06 精华提取：第一版手动标记，AI 仅提候选；拒绝不入库；客户咨询原文不直接生成公开文案 */}
+          <Section title="精华提取候选（手动标记 · 逐条审阅）" accent="#747CBD"
+            extra={<Button size="sm" variant="outline" onClick={() => {
+              const originalExcerpt = window.prompt('粘贴原文片段（保留原样，不改写）'); if (!originalExcerpt) return;
+              const purpose = window.prompt('用途（如：教学案例 / 公众号素材）') ?? '未填';
+              update(d => d.materialCandidates.unshift({
+                id: uid(), sourceRef: '手工标记', sourceLocator: '待补来源位置', originalExcerpt,
+                purpose, reviewStatus: '候选', createdAt: today(),
+              }));
+              toast.success('已标记为候选（等待审阅，不入库）');
+            }}>手动标记候选</Button>}>
+            {db.materialCandidates.length === 0 ? <EmptyState kind="empty" /> : (
+              <ul className="space-y-2 text-sm">
+                {db.materialCandidates.map(m => (
+                  <li key={m.id} className="rounded-lg border bg-[#FAF7F2] p-3">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="text-xs text-stone-400">来源：{m.sourceLocator} · 用途：{m.purpose} · {m.createdAt}</span>
+                      <span className={`text-[10px] rounded px-1.5 py-0.5 ${m.reviewStatus === '已接受' ? 'bg-emerald-100 text-emerald-800' : m.reviewStatus === '已拒绝' ? 'bg-stone-200 text-stone-500' : 'bg-amber-100 text-amber-800'}`}>{m.reviewStatus}</span>
+                    </div>
+                    <p className="text-xs mt-1.5 rounded bg-white p-2">原文：「{m.originalExcerpt}」</p>
+                    {m.editedDraft && <p className="text-xs mt-1 text-stone-500">修改稿（须脱敏）：{m.editedDraft}</p>}
+                    {m.reviewStatus === '候选' && (
+                      <div className="flex gap-1.5 mt-2">
+                        <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => {
+                          if (!m.editedDraft && !window.confirm('尚无脱敏修改稿，客户咨询原文不直接生成公开文案。仍要接受？')) return;
+                          update(d => { d.materialCandidates.find(x => x.id === m.id)!.reviewStatus = '已接受'; });
+                          toast.success('已接受：可进入素材加工（外发仍需确认）');
+                        }}>接受</Button>
+                        <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => {
+                          update(d => { d.materialCandidates.find(x => x.id === m.id)!.reviewStatus = '已拒绝'; });
+                          toast.success('已拒绝：不入库，记录保留可回溯');
+                        }}>拒绝</Button>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="text-[11px] text-stone-400 mt-2">规则：老师定义筛选标准；AI 只能提候选；被拒绝的不进入素材库；对外发布前必须脱敏并确认（见合同与文档页的对外使用状态）。</p>
           </Section>
         </TabsContent>
 

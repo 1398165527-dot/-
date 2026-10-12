@@ -1,9 +1,11 @@
 // P23 设置与模块管理 + P24 接入运行 + P25 用量成本 + Skill 中心
+// v0.4：P00 接入能力真实状态矩阵（数据驱动）、P02 规则版本、P01 数据边界
 import { toast } from 'sonner';
 import { useDB, resetDB } from '@/lib/store';
 import { PageHeader, Section } from '@/components/shared';
 import { Button } from '@/components/ui/button';
 import { MODULE_GROUPS } from '@/types';
+import type { ProviderState } from '@/types';
 
 const SKILLS = [
   { id: 'S1', name: '四象限判断与提醒规则引导', desc: '用老师真实例子形成重要性/紧急性个人规则；到期提醒与重要性分开' },
@@ -12,15 +14,14 @@ const SKILLS = [
   { id: 'S4', name: '阶段复盘与个人画像更新', desc: 'AI 草稿 + 逐项人工确认后更新画像版本' },
 ];
 
-const INTEGRATIONS = [
-  { name: '企业微信（客户沟通）', status: '待核实', note: '外部联系人接口、会话存档授权、发送通道逐项核实中（W01）；当前走「草稿→人工发送→回执登记」过渡' },
-  { name: '飞书（咨询记录与日程提醒）', status: '待接入', note: '咨询文档承载与日历提醒触达；隐私分组配置待 W07 前定稿' },
-  { name: '钉钉 AI 听记（录音转写）', status: '待接入', note: '录音须基于既有告知同意；无法辨认内容标待核对' },
-  { name: 'Notion（知识库）', status: '待接入', note: '境外服务，受限学员资料不放入' },
-  { name: 'scholar（研发检索）', status: '可用（对话内）', note: '检索结果登记来源后入知识库，不虚构文献' },
-  { name: 'Supabase / Neon（数据库）', status: '待验证', note: '行级安全、事务冲销、定时函数；二选一（W01 最高优先级）' },
-  { name: 'Cloudflare（部署与调度）', status: '待验证', note: '国内可达性与备案需实测；备选境内云托管' },
-];
+// P00：状态颜色如实区分；没有调用证据不显示「验证通过」
+const STATE_COLOR: Record<ProviderState, string> = {
+  '验证通过': 'bg-emerald-100 text-emerald-800',
+  '已配置': 'bg-sky-100 text-sky-800',
+  '仅链接': 'bg-stone-100 text-stone-600',
+  '受限': 'bg-amber-100 text-amber-800',
+  '失败': 'bg-rose-100 text-rose-800',
+};
 
 export default function Settings() {
   const [db, update] = useDB();
@@ -75,18 +76,42 @@ export default function Settings() {
         <p className="text-[11px] text-stone-400 mt-2">隐藏 ≠ 删除；隐藏采集类界面时是否暂停后台任务需单独选择（全栈版提供）；需要依赖模块时系统会解释原因并提供替代入口。</p>
       </Section>
 
-      <Section title="接入与运行状态（逐项如实显示）" accent="#A86F59">
-        <ul className="space-y-2 text-sm">
-          {INTEGRATIONS.map(i => (
-            <li key={i.name} className="rounded-lg border bg-white p-3">
-              <div className="flex items-center justify-between">
-                <p className="font-medium text-[13px]">{i.name}</p>
-                <span className={`text-[10px] rounded px-1.5 py-0.5 ${i.status === '可用（对话内）' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>{i.status}</span>
+      <Section title="接入与运行状态（P00 真实状态矩阵）" accent="#A86F59">
+        <table className="w-full text-sm">
+          <thead><tr className="text-left text-xs text-stone-400"><th className="py-1">服务方</th><th>能力</th><th>状态</th><th>验证时间/证据</th><th>降级方案</th></tr></thead>
+          <tbody>
+            {db.providerCaps.map(p => (
+              <tr key={p.id} className="border-t border-stone-100 align-top">
+                <td className="py-2 font-medium text-[13px] pr-2">{p.provider}</td>
+                <td className="pr-2 text-[12px]">{p.capability}</td>
+                <td className="pr-2"><span className={`text-[10px] rounded px-1.5 py-0.5 whitespace-nowrap ${STATE_COLOR[p.state]}`}>{p.state}</span></td>
+                <td className="pr-2 text-[11px] text-stone-500">
+                  {p.verifiedAt ? `${p.verifiedAt} · ${p.evidence ?? ''}` : (p.lastError ? `最近问题：${p.lastError}` : '—')}
+                </td>
+                <td className="text-[11px] text-stone-500">{p.fallback ?? '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="text-[11px] text-stone-400 mt-2">口径：凭据只配置在部署密钥中，不出现在页面/日志/AI输入；接口权限未验证不标「验证通过」。企业微信会话内容接口文档与权限待复核；Notion 需逐页授权且境外服务不放受限学员资料。</p>
+      </Section>
+
+      <Section title="规则与 Skill 版本（P02：未确认规则不自动生效）" accent="#A86F59">
+        <div className="space-y-2">
+          {db.rules.map(r => (
+            <div key={r.id} className="rounded-lg border bg-white p-3 text-sm">
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-medium text-[13px]">{r.ruleType} <span className="text-stone-400 font-normal">v{r.version}</span></p>
+                <span className={`text-[10px] rounded px-1.5 py-0.5 ${r.status === '已确认' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                  {r.status}{r.confirmedAt ? ` · ${r.confirmedAt}` : ''}
+                </span>
               </div>
-              <p className="text-[11px] text-stone-500 mt-1">{i.note}</p>
-            </li>
+              <p className="text-[12px] text-stone-600 mt-1">{r.content}</p>
+              {r.examples && <p className="text-[11px] text-stone-400 mt-1">例子：{r.examples}</p>}
+            </div>
           ))}
-        </ul>
+        </div>
+        <p className="text-[11px] text-stone-400 mt-2">草稿状态的规则仅作参考，不自动分级/外发；修改须经老师确认后生成新版本，历史版本保留。</p>
       </Section>
 
       <Section title="用量与成本（估算 ≠ 账单；未知单价标「待报价」）" accent="#4A3934">
@@ -115,7 +140,7 @@ export default function Settings() {
           <Button size="sm" variant="outline" className="text-rose-700 border-rose-200" onClick={() => {
             if (window.confirm('将清空当前浏览器内的全部改动并恢复虚构示例数据，确认？')) { resetDB(); location.reload(); }
           }}>重置为示例数据</Button>
-          <p className="text-[11px] text-stone-400">验证版数据仅保存在本浏览器 localStorage；清除浏览器数据会丢失，不跨设备同步。</p>
+          <p className="text-[11px] text-stone-400">P01 数据边界：验证版数据仅保存在本浏览器 localStorage，<b>不可承载关键业务数据</b>；清除浏览器数据会丢失，不跨设备同步。迁移到数据库的路径：备份导出 → 盘点 → 映射查重预览 → 小批导入 → 关联核对 → 双设备测试 → 停止旧写入。旧版本地数据打开本版会自动补齐新集合，不丢原有数据。</p>
         </div>
       </Section>
     </div>
