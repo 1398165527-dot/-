@@ -10,11 +10,25 @@ export function loadDB(): DB {
   if (cache) return cache;
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) { cache = JSON.parse(raw) as DB; return cache; }
+    if (raw) {
+      cache = JSON.parse(raw) as DB;
+      migrate(cache); // P01：旧版本地数据补齐 v0.4 新增集合，不丢原有数据
+      persist();
+      return cache;
+    }
   } catch { /* 解析失败则重置 */ }
   cache = seedDB();
   persist();
   return cache;
+}
+
+/** P01 迁移保护：为 v0.4 之前的本地数据补空集合与缺省字段（幂等，不覆盖已有数据） */
+function migrate(db: DB) {
+  const d = db as unknown as Record<string, unknown>;
+  const arr = (k: string) => { if (!Array.isArray(d[k])) d[k] = []; };
+  ['providerCaps', 'rules', 'commEvents', 'materialCandidates', 'meetingEvidence', 'migrationBatches'].forEach(arr);
+  if (d.collectionConfig === undefined) d.collectionConfig = undefined;
+  db.attendance?.forEach(a => { if (!a.evidence) a.evidence = '手动确认'; });
 }
 export function persist() {
   if (cache) localStorage.setItem(KEY, JSON.stringify(cache));
@@ -53,7 +67,7 @@ export const nowHM = () => { const d = new Date(); return `${String(d.getHours()
 export function checkin(db: DB, sessionId: string, studentId: string): { created: boolean; att: Attendance; deducted: boolean; reason: string } {
   const exist = db.attendance.find(a => a.sessionId === sessionId && a.studentId === studentId);
   if (exist) return { created: false, att: exist, deducted: false, reason: '已有签到记录，未重复扣课（幂等）' };
-  const att: Attendance = { id: uid(), sessionId, studentId, status: '出勤', checkinAt: `${today()}T${nowHM()}`, corrections: [] };
+  const att: Attendance = { id: uid(), sessionId, studentId, status: '出勤', evidence: '手动确认', checkinAt: `${today()}T${nowHM()}`, corrections: [] };
   db.attendance.push(att);
   // 是否核销由产品快照规则决定；未配置（不自动核销）时不扣课
   const en = db.enrollments.find(e => e.studentId === studentId && e.status === '服务中');
